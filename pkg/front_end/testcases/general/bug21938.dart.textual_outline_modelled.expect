@@ -1,0 +1,2 @@
+main() {}
+test(Object x, Function f) {}

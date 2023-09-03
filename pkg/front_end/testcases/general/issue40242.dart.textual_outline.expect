@@ -1,0 +1,8 @@
+class C {}
+
+extension E on C {
+  errors() {}
+}
+
+errors() {}
+main() {}
