@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' hide FileSystemEntity;
 
 import 'package:args/args.dart';
@@ -20,7 +21,7 @@ import 'package:vm/target/flutter.dart';
 
 import 'transformer/annotation/anno_transformer.dart';
 import 'transformer/built/tostring_transformer.dart';
-import 'transformer/optimize/constant_optimize_transformer.dart';
+import 'transformer/optimize/constant_opt_transformer.dart';
 
 /// Wrapper around [FrontendCompiler] that adds [widgetCreatorTracker] kernel
 /// transformation to the compilation.
@@ -30,28 +31,30 @@ class _FlutterFrontendCompiler implements frontend.CompilerInterface {
       bool? useDebuggerModuleNames,
       bool? emitDebugMetadata,
       frontend.ProgramTransformer? transformer,
-      this.constantOptimize = false,
-      this.aopAnnotation = false})
+      this.aopAnnotation = false,
+      this.constantOptimize = null})
       : _compiler = frontend.FrontendCompiler(output,
             transformer: transformer,
             unsafePackageSerialization: unsafePackageSerialization);
 
   final frontend.CompilerInterface _compiler;
 
-  final bool constantOptimize;
-  final ConstantOptimizeTransformer consTransformer =
-      ConstantOptimizeTransformer();
   final bool aopAnnotation;
   final AnnotationTransformer annTransformer = AnnotationTransformer();
+  final String? constantOptimize;
+  final ConstantOptTransformer consTransformer =
+      ConstantOptTransformer();
 
   @override
   Future<bool> compile(String filename, ArgResults options,
       {IncrementalCompiler? generator}) async {
-    print('[aop] constantOptimize: $constantOptimize');
     print('[aop] aopAnnotation: $aopAnnotation');
-
+    print('[aop] constantOptimize: $constantOptimize');
     List<FlutterTransformer> transformers = FlutterTarget.transformers;
-    if (constantOptimize && !transformers.contains(consTransformer)) {
+    if (constantOptimize != null && !transformers.contains(consTransformer)) {
+      List<int> bytes = base64Decode(constantOptimize!);
+      List<String> aopPackageList = String.fromCharCodes(bytes).split('#');
+      consTransformer.setAopPackageList(aopPackageList);
       transformers.add(consTransformer);
     }
     if (aopAnnotation && !transformers.contains(annTransformer)) {
@@ -150,10 +153,10 @@ Future<int> starter(
   ArgResults options;
   try {
     final ArgParser parser = frontend.argParser;
-    parser.addFlag('constant_optimize',
-        help: 'support constant optimize by transform', defaultsTo: false);
-    parser.addFlag('aop_annotation',
+    parser.addFlag('aop-annotation',
         help: 'aop annotation by transform', defaultsTo: false);
+    parser.addOption('aop-constant-optimize',
+        help: 'support constant optimize by transform', defaultsTo: null);
     options = parser.parse(args);
   } catch (error) {
     print('ERROR: $error\n');
@@ -210,8 +213,9 @@ Future<int> starter(
     useDebuggerModuleNames: options['debugger-module-names'] as bool,
     emitDebugMetadata: options['experimental-emit-debug-metadata'] as bool,
     unsafePackageSerialization: options['unsafe-package-serialization'] as bool,
-    constantOptimize: options['constant_optimize'],
-    aopAnnotation: options['aop_annotation'],
+    aopAnnotation: options['aop-annotation'],
+    constantOptimize: options['aop-constant-optimize'],
+
   );
 
   if (options.rest.isNotEmpty) {
