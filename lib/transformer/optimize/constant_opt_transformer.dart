@@ -2,6 +2,8 @@
 ///Email: yangl@inke.cn
 ///Date: 2023/8/30
 
+import 'dart:io';
+
 import 'package:kernel/ast.dart';
 import 'package:vm/target/flutter.dart';
 
@@ -30,6 +32,10 @@ class ConstantOptTransformer extends FlutterTransformer {
     if (optMethodMap == null) return;
     Library optLibrary = optMethodMap['library'];
     Procedure optMethod = optMethodMap['method'];
-    StringTransformer(optLibrary, optMethod, _needAop).aopTransform(libraries);
+    final Map<String, String> optMap = {};
+    StringTransformer(optLibrary, optMethod, optMap, _needAop)
+        .aopTransform(libraries);
+    File('.dart_tool/app_constant_opt.txt').writeAsStringSync(
+        optMap.entries.map((e) => e.key + ' -> ' + e.value).join('\n'));
   }
 }

@@ -15,11 +15,17 @@ import '../utils/constant_opt_utils.dart';
 class StringTransformer extends Transformer {
   final Library optExtensionLib;
   final Procedure optMethod;
+  final Map<String, String> optMap;
   final bool Function(Library) needAop;
 
   Library? _cLibrary;
 
-  StringTransformer(this.optExtensionLib, this.optMethod, this.needAop);
+  StringTransformer(
+    this.optExtensionLib,
+    this.optMethod,
+    this.optMap,
+    this.needAop,
+  );
 
   void aopTransform(List<Library> libraries) {
     for (Library library in libraries) {
@@ -38,7 +44,7 @@ class StringTransformer extends Transformer {
   @override
   TreeNode visitField(Field node) {
     Field field = super.visitField(node) as Field;
-    if (_needModify && field.initializer is StringLiteral) {
+    if (_needModify && isValidStringLiteral(field.initializer)) {
       //调整 const String constantValue = '123';
       //为： String constantValue = '123'.opt();
       _insertImportIfNeed();
@@ -53,7 +59,7 @@ class StringTransformer extends Transformer {
   TreeNode visitVariableDeclaration(VariableDeclaration node) {
     VariableDeclaration varDeclare =
         super.visitVariableDeclaration(node) as VariableDeclaration;
-    if (_needModify && varDeclare.initializer is StringLiteral) {
+    if (_needModify && isValidStringLiteral(varDeclare.initializer)) {
       //调整 const String constantValue = '123';
       //为： String constantValue = '123'.opt();
       _insertImportIfNeed();
@@ -67,7 +73,7 @@ class StringTransformer extends Transformer {
   @override
   TreeNode visitVariableSet(VariableSet node) {
     VariableSet variableSet = super.visitVariableSet(node) as VariableSet;
-    if (_needModify && variableSet.value is StringLiteral) {
+    if (_needModify && isValidStringLiteral(variableSet.value)) {
       //调整 constantValue = '123';
       //为： constantValue = '123'.opt();
       _insertImportIfNeed();
@@ -105,8 +111,8 @@ class StringTransformer extends Transformer {
     List<Expression> positional = arguments.positional;
     for (int i = 0, j = positional.length; i < j; i++) {
       Expression expr = positional[i];
-      if (expr is StringLiteral) {
-        Expression methodGetExpr = _genOptGet(arguments, expr);
+      if (isValidStringLiteral(expr)) {
+        Expression methodGetExpr = _genOptGet(arguments, expr as StringLiteral);
         positionalReplace[i] = methodGetExpr;
       }
     }
@@ -123,8 +129,8 @@ class StringTransformer extends Transformer {
     for (int i = 0, j = named.length; i < j; i++) {
       NamedExpression namedExpr = named[i];
       Expression expr = namedExpr.value;
-      if (expr is StringLiteral) {
-        Expression methodGetExpr = _genOptGet(null, expr);
+      if (isValidStringLiteral(expr)) {
+        Expression methodGetExpr = _genOptGet(null, expr as StringLiteral);
         NamedExpression newNameExpr = NamedExpression(
           namedExpr.name,
           methodGetExpr,
@@ -142,10 +148,16 @@ class StringTransformer extends Transformer {
     }
   }
 
+  bool isValidStringLiteral(Expression? expr) {
+    return expr is StringLiteral && expr.value.isNotEmpty;
+  }
+
   //修改方法调用
   Expression _genOptGet(TreeNode? parent, StringLiteral literal) {
-    String displayText = encodeStr(literal.value);
-    Arguments arguments = Arguments([StringLiteral(displayText)]);
+    String originText = literal.value;
+    String newText = encodeStr(originText);
+    optMap[originText] = newText;
+    Arguments arguments = Arguments([StringLiteral(newText)]);
     Expression expr = StaticInvocation(optMethod, arguments);
     expr.parent = parent;
     return expr;
